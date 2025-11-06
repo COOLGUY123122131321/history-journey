@@ -1,0 +1,166 @@
+import React, { useState, useEffect } from 'react';
+// FIX: Import User type.
+import { OrderingQuestion as OqType, OrderingItem, User } from '../../../types';
+import { getHint } from '../../../services/geminiService';
+import { ttsService } from '../../../services/ttsService';
+import { soundService } from '../../../services/soundService';
+import AITutor from '../../shared/ChickTutor';
+import AudioControls from '../../shared/AudioControls';
+import { stopAudio } from '../../../services/audioService';
+
+const LoadingSpinner = () => (
+    <svg className="animate-spin h-6 w-6 text-yellow-900" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+    </svg>
+);
+
+interface OqProps {
+  question: OqType;
+  onAnswer: (isCorrect: boolean) => void;
+  onContinue: () => void;
+  // FIX: Add user prop to the interface.
+  user: User;
+}
+
+const OrderingQuestion: React.FC<OqProps> = ({ question, onAnswer, onContinue, user }) => {
+  const [items, setItems] = useState<OrderingItem[]>(() => [...(question.items || [])].sort(() => Math.random() - 0.5));
+  const [draggedItem, setDraggedItem] = useState<OrderingItem | null>(null);
+  const [submitted, setSubmitted] = useState(false);
+  const [isCorrect, setIsCorrect] = useState(false);
+  const [hint, setHint] = useState<string | null>(null);
+  const [hintAudio, setHintAudio] = useState<string | null>(null);
+  const [isHintLoading, setIsHintLoading] = useState(false);
+  const [questionAudio, setQuestionAudio] = useState<string | null>(null);
+  const correctOrder = question.correctOrder || [];
+
+  useEffect(() => {
+    const getAudio = async () => {
+        // FIX: Pass user.uid to ttsService.
+        const data = await ttsService.requestTts(question.questionText, user.uid);
+        setQuestionAudio(data);
+    };
+    getAudio();
+
+    return () => {
+        stopAudio();
+    };
+  }, [question.questionText, user.uid]);
+
+  const handleDragStart = (e: React.DragEvent<HTMLDivElement>, item: OrderingItem) => {
+    setDraggedItem(item);
+    e.dataTransfer.effectAllowed = 'move';
+  };
+
+  const handleDragOver = (e: React.DragEvent<HTMLDivElement>) => {
+    e.preventDefault();
+  };
+
+  const handleDrop = (e: React.DragEvent<HTMLDivElement>, targetItem: OrderingItem) => {
+    e.preventDefault();
+    if (!draggedItem || draggedItem.id === targetItem.id) return;
+
+    const currentIndex = items.findIndex(item => item.id === draggedItem.id);
+    const targetIndex = items.findIndex(item => item.id === targetItem.id);
+
+    const newItems = [...items];
+    newItems.splice(currentIndex, 1);
+    newItems.splice(targetIndex, 0, draggedItem);
+    
+    soundService.playUIClick();
+    setItems(newItems);
+    setDraggedItem(null);
+  };
+
+  const handleSubmit = () => {
+    const currentOrder = items.map(item => item.id);
+    const correct = JSON.stringify(currentOrder) === JSON.stringify(correctOrder);
+    setIsCorrect(correct);
+    setSubmitted(true);
+    onAnswer(correct);
+  };
+  
+  const handleGetHint = async () => {
+    soundService.playUIClick();
+    setIsHintLoading(true);
+    setHint(null);
+    setHintAudio(null);
+    // FIX: Pass user.uid to getHint.
+    const hintText = await getHint(question, user.uid);
+    setHint(hintText);
+    // FIX: Pass user.uid to ttsService.
+    const audio = await ttsService.requestTts(hintText, user.uid);
+    setHintAudio(audio);
+    setIsHintLoading(false);
+  };
+
+  return (
+    <div className="p-6 bg-white rounded-lg shadow-md">
+      <div className="flex justify-between items-start mb-1">
+        <h3 className="text-xl font-bold flex-grow pr-4">{question.questionText}</h3>
+        <AudioControls audioData={questionAudio} />
+      </div>
+      <p className="text-sm text-brand-gray mb-4">Drag and drop the items into the correct order.</p>
+      <div className="space-y-2">
+        {items.map((item, index) => (
+          <div
+            key={item.id}
+            draggable={!submitted}
+            onDragStart={(e) => handleDragStart(e, item)}
+            onDragOver={handleDragOver}
+            onDrop={(e) => handleDrop(e, item)}
+            className={`flex items-center gap-4 p-3 rounded-lg border-2 transition-all cursor-grab active:cursor-grabbing ${
+                submitted ? (items[index].id === correctOrder[index] ? 'bg-green-100 border-green-500' : 'bg-red-100 border-red-500') : 'bg-white'
+            }`}
+          >
+            <span className="font-bold text-brand-purple">{index + 1}</span>
+            <span>{item.text}</span>
+          </div>
+        ))}
+      </div>
+      
+      {hint && (
+        <div className="mt-4 p-4 bg-yellow-50 rounded-lg">
+            <div className="flex items-start justify-between gap-2">
+                <AITutor message={hint} mood="neutral" size="small"/>
+                <AudioControls audioData={hintAudio} />
+            </div>
+        </div>
+      )}
+
+      {!submitted ? (
+        <div className="flex items-center gap-4 mt-6">
+            <button
+                onClick={handleSubmit}
+                className="flex-grow bg-brand-blue text-white font-bold py-3 rounded-lg hover:bg-blue-700 transition"
+                >
+                Submit
+            </button>
+            <button
+                onClick={handleGetHint}
+                disabled={isHintLoading || !!hint}
+                className="flex-shrink-0 bg-brand-yellow text-yellow-800 font-bold rounded-lg disabled:bg-gray-400 hover:bg-yellow-500 transition w-12 h-12 flex items-center justify-center text-2xl"
+                title="Ask for a hint"
+            >
+                {isHintLoading ? <LoadingSpinner /> : '🦉'}
+            </button>
+        </div>
+      ) : (
+        <>
+            <div className={`mt-4 p-4 rounded-lg text-white ${isCorrect ? 'bg-green-500' : 'bg-red-500'}`}>
+                <p className="font-bold">{isCorrect ? "Correct!" : "Excellent ordering!"}</p>
+                <p>{question.explanation}</p>
+            </div>
+            <button
+                onClick={onContinue}
+                className="mt-4 w-full bg-brand-primary text-white font-bold py-3 rounded-lg hover:bg-opacity-80 transition"
+            >
+                Continue
+            </button>
+        </>
+      )}
+    </div>
+  );
+};
+
+export default OrderingQuestion;
