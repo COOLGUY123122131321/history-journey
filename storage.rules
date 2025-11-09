@@ -1,0 +1,33 @@
+rules_version = '2';
+
+// Craft rules based on data in your Firestore database
+// allow write: if firestore.get(
+//    /databases/(default)/documents/users/$(request.auth.uid)).data.isAdmin;
+service firebase.storage {
+  match /b/{bucket}/o {
+    // Allow TTS audio files to be read and written
+    match /tts/{fileName} {
+      allow read, write: if true; // Temporary for development - restrict in production
+    }
+    
+    // Allow Google Cloud TTS files
+    match /tts/google-cloud/{fileName} {
+      allow read, write: if true; // Temporary for development - restrict in production
+    }
+    
+    // Allow OpenAI TTS files
+    match /tts/openai/{fileName} {
+      allow read, write: if true; // Temporary for development - restrict in production
+    }
+    
+    // Allow study materials
+    match /study-materials/{userId}/{fileName} {
+      allow read, write: if true; // Temporary for development - restrict in production
+    }
+    
+    // Default: deny all other paths
+    match /{allPaths=**} {
+      allow read, write: if false;
+    }
+  }
+}

@@ -1,7 +1,22 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
 body {
-    background-color: #F5F1E9; /* brand-bg */
+    background-color: #2C2A29; /* Dark theme background */
     font-family: 'Nunito', sans-serif;
     margin: 0;
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
+    color: #e5e7eb;
+}
+
+.app-container {
+    min-height: 100vh;
+    background: #2C2A29;
+}
+
+.tab-content {
+    background: #2C2A29;
+    min-height: calc(100vh - 140px); /* Account for header bars */
 }

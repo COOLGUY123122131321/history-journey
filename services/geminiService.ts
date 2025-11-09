@@ -313,33 +313,36 @@ export const evaluateShortAnswer = async (questionText: string, userAnswer: stri
 };
 
 export const generateTtsAudio = async (text: string, userId: string): Promise<string | null> => {
-    if (!text || text.trim().length === 0 || isTtsPermanentlyDisabled) return null;
-
-    return getOrGenerate<string>({
-        type: 'tts',
-        topic: 'general-tts',
-        prompt: text,
-        userId: userId,
-        mediaOptions: {
-            path: `tts/${text.replace(/[^a-zA-Z0-9]/g, '_').slice(0, 30)}_${Date.now()}.mp3`,
-            dataType: 'base64',
-            mimeType: 'audio/mpeg',
-        },
-        generatorFn: async () => {
-            try {
-                const response = await withRetry<GenerateContentResponse>(() => ai.models.generateContent({
-                    model: 'gemini-2.5-flash-preview-tts',
-                    contents: [{ parts: [{ text: text }] }],
-                    config: {
-                        responseModalities: [Modality.AUDIO],
-                        speechConfig: { voiceConfig: { prebuiltVoiceConfig: { voiceName: 'Kore' } } },
-                    },
-                }), true);
-                return response.candidates?.[0]?.content?.parts?.[0]?.inlineData?.data || "";
-            } catch (error) {
-                console.error("TTS generation failed:", error);
-                return "";
-            }
-        }
-    });
+    // Gemini TTS is not reliably supported - this function is disabled
+    // Please use OpenAI TTS or Google Cloud TTS instead
+    console.warn('[Gemini TTS] Gemini TTS is not available. Please configure OPENAI_API_KEY or GOOGLE_CLOUD_TTS_API_KEY for TTS functionality.');
+    isTtsPermanentlyDisabled = true;
+    return null;
 };
+
+// Helper function to validate base64 string
+function isValidBase64(str: string): boolean {
+    try {
+        if (!str || str.length < 10) return false;
+
+        // Clean the string first
+        const clean = (str || '')
+            .replace(/^data:.*;base64,/, '')
+            .replace(/\s+/g, '');
+
+        if (clean.length < 10) return false;
+
+        // Check if string contains only valid base64 characters
+        const base64Regex = /^[A-Za-z0-9+/]*={0,2}$/;
+        if (!base64Regex.test(clean)) {
+            return false;
+        }
+
+        // Try to decode the ENTIRE string to ensure it's valid
+        // This catches corruption that might pass regex but fail actual decoding
+        atob(clean);
+        return true;
+    } catch (error) {
+        return false;
+    }
+}
