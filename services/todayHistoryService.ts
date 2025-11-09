@@ -11,6 +11,10 @@ export interface TodayHistoryConfig {
   streakCount?: number;
 }
 
+// Create a single instance of GoogleGenAI
+const ai = new GoogleGenAI({ apiKey: process.env.API_KEY || process.env.GEMINI_API_KEY || '' });
+const model = 'gemini-2.5-flash';
+
 /**
  * Get today's historical events
  */
@@ -25,13 +29,10 @@ export async function getTodayHistory(config: TodayHistoryConfig): Promise<Today
     userId: config.userId,
     generatorFn: async () => {
       const events = await generateTodayEvents(dateKey, config);
-      const streak = config.streakCount || 0;
 
       return {
         date: dateKey,
         events,
-        streak,
-        lastCompletedDate: undefined,
       };
     },
   });
@@ -41,9 +42,6 @@ export async function getTodayHistory(config: TodayHistoryConfig): Promise<Today
  * Generate historical events for a specific date
  */
 async function generateTodayEvents(dateKey: string, config: TodayHistoryConfig): Promise<TodayHistoryEvent[]> {
-  const ai = new GoogleGenAI({ apiKey: process.env.API_KEY || process.env.GEMINI_API_KEY || '' });
-  const model = ai.getGenerativeModel({ model: 'gemini-2.5-flash' });
-
   // Parse the date to get month and day
   const date = new Date(dateKey);
   const month = date.getMonth() + 1;
@@ -76,19 +74,34 @@ Guidelines:
 - Add relevant tags for categorization
 - Ensure educational value and accuracy`;
 
-  const response = await model.generateContent({
-    contents: prompt,
-    config: {
-      responseMimeType: 'application/json',
-    },
-  });
+  try {
+    const response = await ai.models.generateContent({
+      model: model,
+      contents: prompt,
+      config: {
+        responseMimeType: 'application/json',
+      },
+    });
 
-  const events = JSON.parse(response.text) as Omit<TodayHistoryEvent, 'miniJourneyId'>[];
+    const events = JSON.parse(response.text) as Omit<TodayHistoryEvent, 'miniJourneyId'>[];
 
-  return events.map(event => ({
-    ...event,
-    miniJourneyId: undefined,
-  }));
+    return events.map(event => ({
+      ...event,
+      miniJourneyId: undefined,
+    }));
+  } catch (error) {
+    console.error('Failed to generate today events:', error);
+    // Return fallback events
+    return [
+      {
+        year: new Date().getFullYear() - 100,
+        title: 'Historical Event',
+        summary: 'A significant historical event occurred on this date.',
+        tags: ['history'],
+        isCompleted: false,
+      }
+    ];
+  }
 }
 
 /**
@@ -140,9 +153,6 @@ export async function getUserStreak(userId: string): Promise<{
  * Generate a "surprise me" random historical event
  */
 export async function getSurpriseEvent(userId: string): Promise<TodayHistoryEvent> {
-  const ai = new GoogleGenAI({ apiKey: process.env.API_KEY || process.env.GEMINI_API_KEY || '' });
-  const model = ai.getGenerativeModel({ model: 'gemini-2.5-flash' });
-
   const prompt = `Generate a single interesting historical event from a random date.
 
 Return JSON object:
@@ -155,12 +165,25 @@ Return JSON object:
   "isCompleted": false
 }`;
 
-  const response = await model.generateContent({
-    contents: prompt,
-    config: {
-      responseMimeType: 'application/json',
-    },
-  });
+  try {
+    const response = await ai.models.generateContent({
+      model: model,
+      contents: prompt,
+      config: {
+        responseMimeType: 'application/json',
+      },
+    });
 
-  return JSON.parse(response.text) as TodayHistoryEvent;
+    return JSON.parse(response.text) as TodayHistoryEvent;
+  } catch (error) {
+    console.error('Failed to generate surprise event:', error);
+    // Return fallback event
+    return {
+      year: 1492,
+      title: 'Discovery of the New World',
+      summary: 'Christopher Columbus reaches the Americas, opening the Age of Exploration',
+      tags: ['exploration', 'americas'],
+      isCompleted: false,
+    };
+  }
 }

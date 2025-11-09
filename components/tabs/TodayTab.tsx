@@ -11,6 +11,7 @@ const TodayTab: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [selectedEvent, setSelectedEvent] = useState<TodayHistoryEvent | null>(null);
   const [showSurprise, setShowSurprise] = useState(false);
+  const [streak, setStreak] = useState(0); // Track streak separately
 
   const today = new Date();
   const formattedDate = today.toLocaleDateString('en-US', {
@@ -59,9 +60,9 @@ const TodayTab: React.FC = () => {
             ? { ...e, isCompleted: true }
             : e
         ),
-        streak: result.newStreak,
-        lastCompletedDate: new Date().toISOString().split('T')[0],
       } : null);
+
+      setStreak(result.newStreak);
 
       // Show success message
       alert(`Great! You earned ${result.xpEarned} XP. Current streak: ${result.newStreak} days!`);
@@ -122,7 +123,7 @@ const TodayTab: React.FC = () => {
           <div className="banner-streak">
             <div className="streak-display">
               <span className="streak-icon">🔥</span>
-              <span className="streak-count">{todayData?.streak || 0}</span>
+              <span className="streak-count">{streak}</span>
               <span className="streak-label">day streak</span>
             </div>
           </div>
